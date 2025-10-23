@@ -6,7 +6,8 @@ This class contains all functions and parameters for pulsar evolution, e.g. NS s
 
 __authors__ = [
     "Camille Liotine <cliotine@u.northwestern.edu>",
-    "Abhishek Chattaraj <a.chattaraj@ufl.edu>"
+    "Abhishek Chattaraj <a.chattaraj@ufl.edu>",
+    "Jorie McDermott <mcdermott.286@buckeyemail.osu.edu>"
 ]
 
 import numpy as np
@@ -30,6 +31,21 @@ doi: 10.1111/j.1365-2966.2005.09802.x
 
 [4] Kiel, P. D., Hurley, J. R., Bailes, M., & Murray, J. R. 2008,
 MNRAS, 388, 393, doi: 10.1111/j.1365-2966.2008.13402.x
+
+[5] Lorimer, D. and Kramer, M. (2005). Handbook of Pulsar
+Astronomy. Cambridge University Press.
+
+[6] Li, Z., Chen, X., Chen, H.-L., and Han, Z. (2021). The
+maximum accreted mass of recycled pulsars. The
+Astrophysical Journal, 922(2):158.
+
+[7] Haensel, P., Zdunik, J. L., Bejger, M., and Lattimer, J. M.
+(2009). Keplerian frequency of uniformly rotating
+neutron stars and strange stars. AA, 502(2):605–610.
+
+[8] Shapiro, S. and Teukolsky, S. (1983). Black Holes, White
+Dwarfs, and Neutron Stars: The Physics of Compact
+Objects. John Wiley and Sons, Inc.
 
 """
 
@@ -135,7 +151,7 @@ class Pulsar:
         P_dot =  9.87e-48*const.secyer * self.Bfield**2/P    ## NS spindown rate
 
         power = 4*np.pi**2 * self.moment_inertia * P_dot / P**3
-        return power  
+        return power, P_dot  
 
     def calc_magnetosphere_radius(self, Mdot_acc):
         '''
@@ -164,6 +180,41 @@ class Pulsar:
         r_m = self.calc_magnetosphere_radius(Mdot_acc)
         omega_eq = 1/(2*np.pi) * (const.standard_cgrav*self.mass/r_m**3)**(1/2)
         return omega_eq
+
+    def calc_NS_spin_limit(self, C = 1.15):
+        '''
+        Calculate the Keplarian limit for the NS spin frequency.
+        This limit is discussed in Li et. al. 2021.
+
+        Inputs:
+        -------
+            C = 1.15, a fitted parameter from  Haensel et al. 2009
+
+        Returns:
+        --------
+            neutron star spin frequency at the Keplarian limit (units of Hz)
+        '''
+        R_ns = self.radius/(100*1e3*10) # convert the neutron star radius from cm to units of 10 km
+        f_k = C * np.sqrt(self.mass/const.Msun) * (R_ns**(-3/2)) # unints of kHz
+        return f_k * 1e3 # return the spin frequency in units of Hz for more convenient use
+
+    def Vdiff_fnct(self, R_mag):
+        '''
+        Calculate the difference between the angular velocity of the neutron star at the magnetic radius (Omega_k) and the co-rotation angular velocity (Omega_co).
+        This term is discussed further in Chattopadhyay et al. 2020.
+
+        Inputs:
+        -------
+            R_mag, magnetic radius of the pulsar; half the Alfven radius [cm??]
+
+        Returns:
+        --------
+            the difference between the angular velocity at the magnetic radius and the co-rotation radius
+        '''
+
+        Omega_co = (2*np.pi)*self.spin # get the angular velocity of rotation (same as the co-rotation angular velocity) [Hz]  
+        Omega_k = np.sqrt(const.standard_cgrav*self.mass/R_mag**3) # from COMPAS function [Hz]
+        return Omega_k - Omega_co # units of Hz
    
     def detached_evolve(self, delta_t, tau_d):
         '''
@@ -197,7 +248,7 @@ class Pulsar:
         self.alive_state = self.is_alive()
 
     
-    def RLO_evolve_Ye2019(self, delta_t, tau_d, delta_M, delta_Md):
+    def RLO_evolve_CMC(self, delta_t, tau_d, delta_M, delta_Md):
         '''
         Evolve a pulsar during Roche Lobe overflow (RLO).
 
@@ -254,7 +305,7 @@ class Pulsar:
     def RLO_evolve_COMPAS(self, delta_M, delta_Md, Mdot_acc, CE):
         '''
         Evolve a pulsar during Roche Lobe overflow (RLO).
-        This uses the prescription for B-field decay applied in COMPAS from Oslowski et al. 2011.
+        This uses the prescription for B-field decay applied in Chattopadhyay et al. 2020 from Oslowski et al. 2011.
         Spin-down is the same for now.
 
         Parameters
@@ -268,6 +319,7 @@ class Pulsar:
         delta_Md *= const.Msun       ## magnetic field mass decay scale [g]
         B_min = 1e8                  ## minimum Bfield strength at which Bfield decay ceases [G]
         mu_0 = 1                     ## permeability of free space [has value unity in cgs]
+        efficiency = 1               ## set the pulsar to the maximum accretion efficiency to start
 
         delta_M *= const.Msun        ## convert Msun to g
 
@@ -278,7 +330,8 @@ class Pulsar:
 
         R_mag = self.calc_magnetosphere_radius(Mdot_acc)   ## calculate magnetic radius BEFORE B-field decay and mass accretion
 
-        M_f = M_i + delta_M
+        # allow the NS to accrete mass
+        M_f = M_i + (delta_M * efficiency) # add an accretion efficiency factor to prevent the pulsar from accreting when it is spinning too fast
         self.mass = M_f
 
         #R_alfven = (2*np.pi**2/(G*mu_0**2))**(1/7) * (R**6/(self.Mdot_edd*M_i**(1/2)))**(2/7) * B_i**(4/7) ## Alfven radius
@@ -296,18 +349,25 @@ class Pulsar:
         ## do we need to subtract the spin from the co-rotation radius here? probably?
         ## last we discussed with Vicky, we decided to leave this out until track interpolation
         ## add an ODE solver using the dM/dt we have in the meantime?
-        omega_k = np.sqrt(G*M_i/R_mag**3) 
-        delta_J = 2/5*delta_M*R_mag**2*omega_k  ##(omega_k - omega_co)  ## change in J due to accretion
-        J_f = J_i + delta_J
+        #omega_k = np.sqrt(G*M_i/R_mag**3) 
+        #delta_J = 2/5*delta_M*R_mag**2*omega_k  ##(omega_k - omega_co)  ## change in J due to accretion
+        #J_f = J_i + delta_J
+
+        # calculate the rate of change of angular momentum using Vdiff
+        V_diff = self.Vdiff_fnct(R_mag) # units of Hz
+        J_dot = efficiency * V_diff * (R_mag**2) * ((Mdot_acc*const.Msun)/const.secyer)
+        J_f = J_i + J_dot
 
         R_mag = self.calc_magnetosphere_radius(Mdot_acc)   ## calculate magnetic radius AFTER B-field decay and mass accretion
         
         ## double check if this should be R_mag or R_NS
-        I_mag = 2/5*M_f*R_mag**2   ## use moment of inertia for sphere w/ magnetic radius during accretion
+        I_mag = 0.237 * M_f * (R_mag**2) * (1 + (4.2 * (M_f/R_mag)) + 90*((M_f/R_mag)**4)) # M_sun m^2 (from Lorimer, D., et. al., Handbook of Pulsar Astronomy)
         omega_f = J_f/I_mag
         self.spin = omega_f
 
         ## check if pulsar has reached the maximum spin limit 
+        spin_limit = self.calc_NS_spin_limit() # units of Hz
+        if self.spin >= spin_limit: efficiency = 0 # prevent accretion when the pulsar hits this spin limit
         ## (does not apply for CE accretion)
         #if not CE:
         spin_eq = self.calc_NS_spin_equilibrium(Mdot_acc)
@@ -328,7 +388,7 @@ class Pulsar:
             delta_M = np.random.uniform(0.04, 0.1)  
 
         elif CE_acc_prescription in ["MacLeod", "MacLeod_bounded"]:
-            ## use the MacLeod prescription from COMPAS paper, fit to Fig. 4 in Macleod & Ramirez-Ruiz 
+            ## use the MacLeod prescription from Chattopadhyay et al. 2020, fit to Fig. 4 in Macleod & Ramirez-Ruiz 
             a_a = -1.1e-5; a_b = 1.5e-2; b_a = 1.2e-4; b_b = -1.5e-1
 
             a = a_a*M_comp + b_a
@@ -341,8 +401,8 @@ class Pulsar:
             if CE_acc_prescription == "MacLeod_bounded": 
                 if delta_M < 0.04: delta_M = 0.04
 
-        if acc_decay_prescription == "Ye2019":
-            self.RLO_evolve_Ye2019(delta_t, tau_d, delta_M, delta_Md)
+        if acc_decay_prescription == "CMC":
+            self.RLO_evolve_CMC(delta_t, tau_d, delta_M, delta_Md)
         elif acc_decay_prescription == "COMPAS":
             self.RLO_evolve_COMPAS(delta_M, delta_Md, self.Mdot_edd, True)
 
@@ -357,9 +417,9 @@ class Pulsar:
 
         E_max = 0.01   ## threshold radio efficiency
         L = self.luminosity
-        Edot = self.calc_NS_spindown_power()
+        Edot, P_dot = self.calc_NS_spindown_power()
   
         if ((L/Edot) < E_max): return True
         #elif (self.Bfield < death_line): return False
         else: return False
-       
+        
