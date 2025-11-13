@@ -360,7 +360,7 @@ class Pulsar:
         delta_omega = K_const*B_i**2*self.spin**3    # [1/s^2]
         delta_J_rad = 2/5*M_f*R**2*delta_omega    # [kg m^2/s^2]
                 
-        J_f = J_i + delta_J_acc - delta_J_rad    # CHECK THESE UNITS, THE DELTA_J_RAD UNITS DON'T MATCH WITH THE REST!!
+        J_f = J_i + delta_J_acc - (delta_J_rad*delta_t)    # CHECK THIS, DOES MULTIPLYING DELTA_J_RAD BY DELTA_T COMPLETLY FIX THE ISSUE???
         
         self.mass = M_f
 
@@ -434,7 +434,12 @@ class Pulsar:
         # calculate the rate of change of angular momentum using Vdiff
         V_diff = self.Vdiff_fnct(R_mag)    # [1/s]
         J_dot = efficiency * V_diff * (R_mag**2) * ((Mdot_acc*astro_const.M_sun)/const.secyer)    # [kg m^2/s^2]
-        J_f = J_i + J_dot # CHECK THESE UNITS, THESE DON'T MATCH!!
+
+        # calculate the amount of time in each delta_M step and use this to calculate delta_J (IS THIS THE RIGHT WAY TO FIX THE ISSUE OF J_DOT_ACC UNIT MISMATCH???)
+        delta_t = delta_M/((Mdot_acc*astro_const.M_sun)/const.secyer)    # [s]
+        delta_J = J_dot*delta_t    # [kg m^2/s]
+        
+        J_f = J_i + delta_J # [kg m^2/s]
 
         R_mag = self.calc_magnetosphere_radius(Mdot_acc)   # calculate magnetic radius AFTER B-field decay and mass accretion [m]
         
