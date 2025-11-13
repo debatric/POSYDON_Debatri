@@ -352,7 +352,7 @@ class PulsarHooks(EvolveHooks):
         self.dMd_error = kwargs.get("dMd_error")
         self.taud_error = kwargs.get("taud_error")
 
-        self.pulsar_attr = ['pulsar_spin', 'pulsar_Bfield', 'pulsar_alive']
+        self.pulsar_attr = ['pulsar_spin', 'pulsar_Bfield', 'pulsar_Pdot', 'pulsar_alive']
 
 
     def get_pulsar_history(self, binary, star_NS, star_companion):
@@ -372,6 +372,7 @@ class PulsarHooks(EvolveHooks):
             
         pulsar_spin = []
         pulsar_Bfield = []
+        pulsar_Pdot = []
         pulsar_alive = []
 
         ## if sampling is turned-on, keep input values for decay paremeters
@@ -388,6 +389,7 @@ class PulsarHooks(EvolveHooks):
             ## fill history arrays with NaNs/False until NS is formed
             pulsar_spin.extend(np.full(len(state_history[:NS_start]), np.nan))
             pulsar_Bfield.extend(np.full(len(state_history[:NS_start]), np.nan))
+            pulsar_Pdot.extend(np.full(len(state_history[:NS_start]), np.nan))
             pulsar_alive.extend(np.full(len(state_history[:NS_start]), False))
 
             donor_surface_h1 = np.array(star_companion.surface_h1_history, dtype=float)
@@ -406,6 +408,7 @@ class PulsarHooks(EvolveHooks):
             pulsar = Pulsar(star_NS.mass_history[NS_start])
             pulsar_spin.append(pulsar.spin)
             pulsar_Bfield.append(pulsar.Bfield)
+            pulsar_Pdot.append(pulsar.calc_NS_spindown_rate)
             pulsar_alive.append(pulsar.is_alive())
 
             ## loop through states where star is a NS
@@ -452,25 +455,28 @@ class PulsarHooks(EvolveHooks):
 
                 pulsar_spin.append(pulsar.spin)
                 pulsar_Bfield.append(pulsar.Bfield)
+                pulsar_Pdot.append(pulsar.calc_NS_spindown_rate)
                 pulsar_alive.append(pulsar.is_alive())
             
             ## fill remaining state history if NS becomes a different object after pulsar evolution
             if (NS_end+1) < len(state_history):
                 pulsar_spin.extend(np.full(len(state_history[NS_end+1:]), np.nan))
                 pulsar_Bfield.extend(np.full(len(state_history[NS_end+1:]), np.nan))
+                pulsar_Pdot.extend(np.full(len(state_history[NS_end+1:]), np.nan))
                 pulsar_alive.extend(np.full(len(state_history[NS_end+1:]), False))
 
         ## if star is never a NS, fill history arrays with NaN/False               
         else:     
             pulsar_spin.extend(np.full(len(state_history), np.nan))
             pulsar_Bfield.extend(np.full(len(state_history), np.nan))
+            pulsar_Pdot.extend(np.full(len(state_history), np.nan))
             pulsar_alive.extend(np.full(len(state_history), False))
 
         ## raise an error if history length mismatch
-        if ((len(pulsar_spin) != len(state_history)) | len(pulsar_Bfield) != len(state_history) | len(pulsar_alive) != len(state_history)):
+        if ((len(pulsar_spin) != len(state_history)) | len(pulsar_Bfield) != len(state_history) | len(pulsar_Pdot) != len(state_history) | len(pulsar_alive) != len(state_history)):
             raise ValueError("length of pulsar history does not match length of binary history")
 
-        return np.array(pulsar_spin, dtype=float), np.array(pulsar_Bfield, dtype=float), np.array(pulsar_alive, dtype=bool)
+        return np.array(pulsar_spin, dtype=float), np.array(pulsar_Bfield, dtype=float), np.array(pulsar_Pdot, dtype=float), np.array(pulsar_alive, dtype=bool)
     
     def pre_evolve(self, binary):
         """Initialize the step name to match history."""
@@ -487,17 +493,19 @@ class PulsarHooks(EvolveHooks):
         """
         Using the binary history, recreate the pulsar evolution history.
         MUST be used with the step_names hook!
-        extra_columns=['pulsar_spin', 'pulsar_Bfield', 'pulsar_alive'] for S1, S2 kwargs 
+        extra_columns=['pulsar_spin', 'pulsar_Bfield', 'pulsar_Pdot', 'pulsar_alive'] for S1, S2 kwargs 
         """   
-        star_1_pulsar_spin, star_1_pulsar_Bfield, star_1_pulsar_alive = self.get_pulsar_history(binary, binary.star_1,  binary.star_2)
-        star_2_pulsar_spin, star_2_pulsar_Bfield, star_2_pulsar_alive = self.get_pulsar_history(binary, binary.star_2,  binary.star_1)
+        star_1_pulsar_spin, star_1_pulsar_Bfield, star_1_pulsar_Pdot, star_1_pulsar_alive = self.get_pulsar_history(binary, binary.star_1,  binary.star_2)
+        star_2_pulsar_spin, star_2_pulsar_Bfield, star_2_pulsar_Pdot, star_2_pulsar_alive = self.get_pulsar_history(binary, binary.star_2,  binary.star_1)
 
         setattr(binary.star_1, "pulsar_spin", star_1_pulsar_spin)
         setattr(binary.star_1, "pulsar_Bfield", star_1_pulsar_Bfield)
+        setattr(binary.star_1, "pulsar_Pdot", star_1_pulsar_Pdot)
         setattr(binary.star_1, "pulsar_alive", star_1_pulsar_alive)
 
         setattr(binary.star_2, "pulsar_spin", star_2_pulsar_spin)
         setattr(binary.star_2, "pulsar_Bfield", star_2_pulsar_Bfield)
+        setattr(binary.star_2, "pulsar_Pdot", star_2_pulsar_Pdot)
         setattr(binary.star_2, "pulsar_alive", star_2_pulsar_alive)
 
         return binary
