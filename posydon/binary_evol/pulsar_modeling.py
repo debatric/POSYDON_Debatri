@@ -89,7 +89,7 @@ class Pulsar:
         else:
             self.spin = spin
             
-        if np.isna(P_dot):
+        if np.isnan(P_dot):
             self.P_dot = self.calc_NS_spindown_rate()    ## initial calculation for NS spindown rate [unitless]
         else:
             self.P_dot = P_dot
