@@ -154,7 +154,7 @@ class Pulsar:
         units of distribution from Szary et al. 2014 are mJy*kpc^2
         Returns the radio luminosity in unis of [J/s]
         """
-        kpc2cm = astro_const.kpc.value    # kpc to m
+        kpc2m = astro_const.kpc.value    # kpc to m
         mJy2si = 1e-29              # milliJansky in SI units [J/s/m^2/Hz]
         Hz = 1400*1e6               # Hz conversion for radio luminosity (1400 MHz)
         mJykpc2si = mJy2si*kpc2m**2*Hz
