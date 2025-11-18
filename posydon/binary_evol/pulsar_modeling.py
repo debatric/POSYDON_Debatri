@@ -408,7 +408,7 @@ class Pulsar:
         I = self.moment_inertia       # moment of interia of the NS [kg m^2]
 
         R_mag = self.calc_magnetosphere_radius(Mdot_acc)   # calculate magnetic radius BEFORE B-field decay and mass accretion [m]
-
+        
         # allow the NS to accrete mass
         M_f = M_i + (delta_M * efficiency) # add an accretion efficiency factor to prevent the pulsar from accreting when it is spinning too fast [kg]
         self.mass = M_f
@@ -433,7 +433,7 @@ class Pulsar:
         #J_f = J_i + delta_J
 
         # calculate the rate of change of angular momentum using Vdiff
-        V_diff = self.Vdiff_fnct(R_mag)    # [1/s]
+        V_diff = np.mod(self.Vdiff_fnct(R_mag))    # [1/s]
         J_dot = efficiency * V_diff * (R_mag**2) * ((Mdot_acc*astro_const.M_sun.value)/const.secyer)    # [kg m^2/s^2]
 
         # calculate the amount of time in each delta_M step and use this to calculate delta_J (IS THIS THE RIGHT WAY TO FIX THE ISSUE OF J_DOT_ACC UNIT MISMATCH???)
@@ -446,8 +446,8 @@ class Pulsar:
         
         # double check if this should be R_mag or R_NS
         # CHECK THESE UNITS!!
-        I_mag = 0.237 * M_f * (R_mag**2) * (1 + (4.2 * (M_f/R_mag)) + 90*((M_f/R_mag)**4)) # M_sun m^2 (from Lorimer, D., et. al., Handbook of Pulsar Astronomy)
-        omega_f = J_f/I_mag
+        I_mag = 0.237 * M_f * (R_mag**2) * (1 + (4.2 * (M_f/R_mag)*(1e3/astro_const.M_sun.value)) + 90*((M_f/R_mag)*(1e3/astro_const.M_sun.value))**4) # kg m^2 (from Chattopadhyay, et. al. 2020)
+        omega_f = J_f/I_mag # [Hz]
         self.spin = omega_f
 
         # check if pulsar has reached the maximum spin limit 
