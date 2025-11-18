@@ -433,7 +433,7 @@ class Pulsar:
         #J_f = J_i + delta_J
 
         # calculate the rate of change of angular momentum using Vdiff
-        V_diff = np.mod(self.Vdiff_fnct(R_mag))    # [1/s]
+        V_diff = np.abs(self.Vdiff_fnct(R_mag))    # [1/s]
         J_dot = efficiency * V_diff * (R_mag**2) * ((Mdot_acc*astro_const.M_sun.value)/const.secyer)    # [kg m^2/s^2]
 
         # calculate the amount of time in each delta_M step and use this to calculate delta_J (IS THIS THE RIGHT WAY TO FIX THE ISSUE OF J_DOT_ACC UNIT MISMATCH???)
